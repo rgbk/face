@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Adventure Face</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #a8e6cf;
+      cursor: pointer;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, sans-serif;
+      transition: background-color 0.4s ease;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+    }
+    #face-container {
+      position: relative;
+      transform-origin: center center;
+    }
+    .hint {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #555;
+      font-size: 14px;
+      opacity: 0.5;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      transition: opacity 0.3s ease;
+    }
+  </style>
+</head>
+<body>
+  <div id="face-container">
+    <svg id="face" width="400" height="400" viewBox="0 0 400 400">
+      <!-- Face -->
+      <ellipse id="face-shape" cx="200" cy="200" rx="160" ry="150" fill="#FFE4C9" stroke="#333" stroke-width="3"/>
+      
+      <!-- Left Brow -->
+      <line id="left-brow" x1="140" y1="122" x2="180" y2="118" stroke="#333" stroke-width="4" stroke-linecap="round"/>
+      
+      <!-- Right Brow -->
+      <line id="right-brow" x1="220" y1="118" x2="260" y2="122" stroke="#333" stroke-width="4" stroke-linecap="round"/>
+      
+      <!-- Left Eye Container -->
+      <g id="left-eye">
+        <circle cx="160" cy="160" r="8" fill="#333"/>
+      </g>
+      
+      <!-- Right Eye Container -->
+      <g id="right-eye">
+        <circle cx="240" cy="160" r="8" fill="#333"/>
+      </g>
+      
+      <!-- Nose hint -->
+      <path d="M 198 195 Q 200 210 202 195" fill="none" stroke="#d4a574" stroke-width="2" stroke-linecap="round"/>
+      
+      <!-- Mouth -->
+      <g id="mouth">
+        <path d="M 165 240 Q 200 250 235 240" fill="none" stroke="#333" stroke-width="4" stroke-linecap="round"/>
+      </g>
+    </svg>
+  </div>
+  
+  <div class="hint">tap or click to change</div>
+
+  <script>
+    // Pastel background colors - greens, pinks, blues, lavenders, peaches, skin tones
+    const backgroundColors = [
+      '#a8e6cf', // mint green
+      '#dcedc1', // pale lime
+      '#ffd3b6', // peach
+      '#ffaaa5', // coral pink
+      '#ff8b94', // salmon
+      '#ffc3a0', // apricot
+      '#f0e6ef', // pale lavender
+      '#d4a5a5', // dusty rose
+      '#b5ead7', // seafoam
+      '#c7ceea', // periwinkle
+      '#e2f0cb', // pale green
+      '#ffeaa7', // pale yellow
+      '#dfe6e9', // pale grey blue
+      '#fab1a0', // melon
+      '#fdcb6e', // pastel orange
+      '#f8c8dc', // pink blush
+      '#ffe4c9', // skin tone light
+      '#f5cba7', // skin tone medium
+      '#e8beac', // skin tone warm
+      '#d5b895', // skin tone tan
+      '#c9b8a8', // skin tone neutral
+      '#b8d4e3', // baby blue
+      '#f3e5f5', // pale purple
+      '#e0f7fa', // pale cyan
+      '#fff9c4', // cream
+      '#f5e6d3', // ivory
+      '#edd1b0', // sand
+      '#e6b8a2', // blush
+      '#d4b5b0', // mauve
+      '#bcd4e6', // powder blue
+    ];
+
+    const expressions = [
+      { name: 'neutral', eyeType: 'dot', browAngle: -5, mouthType: 'line' },
+      { name: 'happy', eyeType: 'wide', browAngle: -15, mouthType: 'smile' },
+      { name: 'annoyed', eyeType: 'squint', browAngle: 15, mouthType: 'frown' },
+      { name: 'surprised', eyeType: 'wide', browAngle: -25, mouthType: 'o' },
+      { name: 'ecstatic', eyeType: 'closed', browAngle: -5, mouthType: 'bigSmile' },
+      { name: 'nervous', eyeType: 'wide', browAngle: 20, mouthType: 'grimace' },
+      { name: 'thinking', eyeType: 'lookUp', browAngle: -8, mouthType: 'pout' },
+      { name: 'smug', eyeType: 'halfLid', browAngle: 5, mouthType: 'smirk' },
+      { name: 'dead', eyeType: 'x', browAngle: 0, mouthType: 'wavy' },
+      { name: 'love', eyeType: 'heart', browAngle: -10, mouthType: 'smile' },
+      { name: 'sleepy', eyeType: 'droopy', browAngle: 3, mouthType: 'yawn' },
+      { name: 'angry', eyeType: 'glare', browAngle: 25, mouthType: 'snarl' },
+    ];
+
+    let currentExpression = 0;
+    let currentBgIndex = 0;
+    let mouseX = 0.5;
+    let mouseY = 0.5;
+    let wobbleTime = 0;
+    let isTracking = false;
+    let popScale = 1;
+    let targetPopScale = 1;
+
+    const faceContainer = document.getElementById('face-container');
+    const leftEye = document.getElementById('left-eye');
+    const rightEye = document.getElementById('right-eye');
+    const leftBrow = document.getElementById('left-brow');
+    const rightBrow = document.getElementById('right-brow');
+    const mouth = document.getElementById('mouth');
+
+    function createEye(isLeft, type, offsetX, offsetY) {
+      const baseX = isLeft ? 160 : 240;
+      const baseY = 160;
+      const pupilX = baseX + offsetX;
+      const pupilY = baseY + offsetY;
+
+      switch(type) {
+        case 'wide':
+          return `
+            <ellipse cx="${baseX}" cy="${baseY}" rx="22" ry="28" fill="white" stroke="#333" stroke-width="2"/>
+            <circle cx="${pupilX}" cy="${pupilY}" r="10" fill="#333"/>
+            <circle cx="${pupilX - 3}" cy="${pupilY - 3}" r="3" fill="white"/>
+          `;
+        case 'squint':
+          return `
+            <ellipse cx="${baseX}" cy="${baseY}" rx="20" ry="8" fill="white" stroke="#333" stroke-width="2"/>
+            <circle cx="${pupilX}" cy="${baseY}" r="5" fill="#333"/>
+          `;
+        case 'closed':
+          return `
+            <path d="M ${baseX - 18} ${baseY} Q ${baseX} ${baseY + 12} ${baseX + 18} ${baseY}" 
+                  fill="none" stroke="#333" stroke-width="3" stroke-linecap="round"/>
+          `;
+        case 'lookUp':
+          return `
+            <ellipse cx="${baseX}" cy="${baseY}" rx="20" ry="22" fill="white" stroke="#333" stroke-width="2"/>
+            <circle cx="${baseX + offsetX * 0.3}" cy="${baseY - 10}" r="8" fill="#333"/>
+          `;
+        case 'halfLid':
+          return `
+            <ellipse cx="${baseX}" cy="${baseY + 3}" rx="20" ry="15" fill="white" stroke="#333" stroke-width="2"/>
+            <circle cx="${pupilX}" cy="${baseY + 3}" r="7" fill="#333"/>
+            <ellipse cx="${baseX}" cy="${baseY - 10}" rx="22" ry="12" fill="#FFE4C9"/>
+          `;
+        case 'x':
+          return `
+            <line x1="${baseX - 12}" y1="${baseY - 12}" x2="${baseX + 12}" y2="${baseY + 12}" 
+                  stroke="#333" stroke-width="4" stroke-linecap="round"/>
+            <line x1="${baseX + 12}" y1="${baseY - 12}" x2="${baseX - 12}" y2="${baseY + 12}" 
+                  stroke="#333" stroke-width="4" stroke-linecap="round"/>
+          `;
+        case 'heart':
+          return `
+            <path d="M ${baseX} ${baseY + 12} 
+                     C ${baseX - 20} ${baseY - 5} ${baseX - 20} ${baseY - 18} ${baseX} ${baseY - 8}
+                     C ${baseX + 20} ${baseY - 18} ${baseX + 20} ${baseY - 5} ${baseX} ${baseY + 12}" 
+                  fill="#ff6b9d" stroke="#e05580" stroke-width="2"/>
+          `;
+        case 'droopy':
+          return `
+            <ellipse cx="${baseX}" cy="${baseY + 5}" rx="18" ry="12" fill="white" stroke="#333" stroke-width="2"/>
+            <circle cx="${pupilX * 0.98 + baseX * 0.02}" cy="${baseY + 6}" r="6" fill="#333"/>
+            <path d="M ${baseX - 20} ${baseY - 8} Q ${baseX} ${baseY - 15} ${baseX + 20} ${baseY - 5}" 
+                  fill="#FFE4C9" stroke="#FFE4C9" stroke-width="8"/>
+          `;
+        case 'glare':
+          return `
+            <ellipse cx="${baseX}" cy="${baseY}" rx="18" ry="14" fill="white" stroke="#333" stroke-width="2"/>
+            <circle cx="${pupilX}" cy="${pupilY}" r="8" fill="#333"/>
+            <circle cx="${pupilX - 2}" cy="${pupilY - 2}" r="2" fill="#ff4444"/>
+          `;
+        default: // dot
+          return `<circle cx="${pupilX}" cy="${pupilY}" r="8" fill="#333"/>`;
+      }
+    }
+
+    function createMouth(type, curveOffset) {
+      const baseY = 240;
+      
+      switch(type) {
+        case 'smile':
+          return `<path d="M 155 ${baseY} Q 200 ${baseY + 35} 245 ${baseY}" 
+                        fill="none" stroke="#333" stroke-width="4" stroke-linecap="round"/>`;
+        case 'frown':
+          return `<path d="M 160 ${baseY + 20} Q 200 ${baseY - 10} 240 ${baseY + 20}" 
+                        fill="none" stroke="#333" stroke-width="4" stroke-linecap="round"/>`;
+        case 'o':
+          return `<ellipse cx="200" cy="${baseY + 5}" rx="22" ry="28" fill="#333"/>`;
+        case 'bigSmile':
+          return `
+            <path d="M 145 ${baseY - 5} Q 200 ${baseY + 55} 255 ${baseY - 5}" 
+                  fill="#333" stroke="#333" stroke-width="2"/>
+            <ellipse cx="200" cy="${baseY + 15}" rx="35" ry="8" fill="#ff8a9b" opacity="0.7"/>
+          `;
+        case 'grimace':
+          return `
+            <rect x="155" y="${baseY - 8}" width="90" height="18" rx="3" fill="white" stroke="#333" stroke-width="2"/>
+            <line x1="170" y1="${baseY - 8}" x2="170" y2="${baseY + 10}" stroke="#333" stroke-width="1.5"/>
+            <line x1="185" y1="${baseY - 8}" x2="185" y2="${baseY + 10}" stroke="#333" stroke-width="1.5"/>
+            <line x1="200" y1="${baseY - 8}" x2="200" y2="${baseY + 10}" stroke="#333" stroke-width="1.5"/>
+            <line x1="215" y1="${baseY - 8}" x2="215" y2="${baseY + 10}" stroke="#333" stroke-width="1.5"/>
+            <line x1="230" y1="${baseY - 8}" x2="230" y2="${baseY + 10}" stroke="#333" stroke-width="1.5"/>
+          `;
+        case 'pout':
+          return `<ellipse cx="200" cy="${baseY + 8}" rx="18" ry="12" fill="#333"/>`;
+        case 'smirk':
+          return `<path d="M 165 ${baseY + 5} Q 200 ${baseY} 235 ${baseY - 18}" 
+                        fill="none" stroke="#333" stroke-width="4" stroke-linecap="round"/>`;
+        case 'wavy':
+          return `<path d="M 155 ${baseY} Q 170 ${baseY - 8} 185 ${baseY} Q 200 ${baseY + 8} 215 ${baseY} Q 230 ${baseY - 8} 245 ${baseY}" 
+                        fill="none" stroke="#333" stroke-width="4" stroke-linecap="round"/>`;
+        case 'yawn':
+          return `
+            <ellipse cx="200" cy="${baseY + 10}" rx="25" ry="30" fill="#333"/>
+            <ellipse cx="200" cy="${baseY + 20}" rx="12" ry="8" fill="#ff8a9b" opacity="0.6"/>
+          `;
+        case 'snarl':
+          return `
+            <path d="M 155 ${baseY + 5} Q 175 ${baseY - 15} 200 ${baseY + 5} Q 225 ${baseY - 15} 245 ${baseY + 5}" 
+                  fill="none" stroke="#333" stroke-width="4" stroke-linecap="round"/>
+          `;
+        default: // line
+          return `<path d="M 165 ${baseY} Q 200 ${baseY + curveOffset} 235 ${baseY}" 
+                        fill="none" stroke="#333" stroke-width="4" stroke-linecap="round"/>`;
+      }
+    }
+
+    function updateBrows(angle) {
+      const leftAngle = -angle;
+      const rightAngle = angle;
+      
+      leftBrow.setAttribute('x1', 140);
+      leftBrow.setAttribute('y1', 122 + leftAngle * 0.4);
+      leftBrow.setAttribute('x2', 180);
+      leftBrow.setAttribute('y2', 118 - leftAngle * 0.4);
+      
+      rightBrow.setAttribute('x1', 220);
+      rightBrow.setAttribute('y1', 118 - rightAngle * 0.4);
+      rightBrow.setAttribute('x2', 260);
+      rightBrow.setAttribute('y2', 122 + rightAngle * 0.4);
+    }
+
+    function render() {
+      const exp = expressions[currentExpression];
+      
+      // Eye offset based on mouse/touch position
+      const eyeOffsetX = (mouseX - 0.5) * 12;
+      const eyeOffsetY = (mouseY - 0.5) * 10;
+      
+      // Mouth curve based on mouse Y
+      const mouthCurve = exp.mouthType === 'line' ? (mouseY - 0.5) * 40 : 0;
+      
+      // Update eyes
+      leftEye.innerHTML = createEye(true, exp.eyeType, eyeOffsetX, eyeOffsetY);
+      rightEye.innerHTML = createEye(false, exp.eyeType, eyeOffsetX, eyeOffsetY);
+      
+      // Update brows
+      updateBrows(exp.browAngle);
+      
+      // Update mouth
+      mouth.innerHTML = createMouth(exp.mouthType, mouthCurve);
+    }
+
+    function animate() {
+      wobbleTime += 0.05;
+      
+      // Ease the pop scale
+      popScale += (targetPopScale - popScale) * 0.15;
+      
+      const wobbleX = Math.sin(wobbleTime * 0.8) * 4;
+      const wobbleY = Math.sin(wobbleTime * 1.2) * 3;
+      const wobbleRotate = Math.sin(wobbleTime * 0.5) * 1.5;
+      const breatheX = 1 + Math.sin(wobbleTime * 0.7) * 0.015;
+      const breatheY = 1 + Math.cos(wobbleTime * 0.9) * 0.015;
+      
+      const totalScaleX = breatheX * popScale;
+      const totalScaleY = breatheY * popScale;
+      
+      faceContainer.style.transform = `translate(${wobbleX}px, ${wobbleY}px) rotate(${wobbleRotate}deg) scale(${totalScaleX}, ${totalScaleY})`;
+      
+      requestAnimationFrame(animate);
+    }
+
+    function handleInteraction(x, y) {
+      mouseX = x / window.innerWidth;
+      mouseY = y / window.innerHeight;
+      render();
+    }
+
+    function handleTap() {
+      // Change expression
+      currentExpression = (currentExpression + 1) % expressions.length;
+      
+      // Change background color (random from palette for variety)
+      const newIndex = Math.floor(Math.random() * backgroundColors.length);
+      currentBgIndex = newIndex !== currentBgIndex ? newIndex : (newIndex + 1) % backgroundColors.length;
+      document.body.style.backgroundColor = backgroundColors[currentBgIndex];
+      
+      // Pop animation with ease
+      targetPopScale = 1.15;
+      setTimeout(() => {
+        targetPopScale = 1;
+      }, 100);
+      
+      render();
+    }
+
+    // Mouse events
+    document.addEventListener('mousemove', (e) => {
+      handleInteraction(e.clientX, e.clientY);
+    });
+
+    document.addEventListener('click', handleTap);
+
+    // Touch events - track on touch down and move
+    document.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      isTracking = true;
+      const touch = e.touches[0];
+      handleInteraction(touch.clientX, touch.clientY);
+    }, { passive: false });
+
+    document.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (isTracking) {
+        const touch = e.touches[0];
+        handleInteraction(touch.clientX, touch.clientY);
+      }
+    }, { passive: false });
+
+    document.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      isTracking = false;
+      handleTap();
+    }, { passive: false });
+
+    // Initial render
+    render();
+    animate();
+  </script>
+</body>
+</html>
